@@ -187,6 +187,42 @@ async def list_scheduled_messages(token: str = Depends(verify_token)):
         print(f"[{datetime.now().isoformat()}] Error listing jobs: {type(e).__name__}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to list jobs: {str(e)}")
 
+@app.get("/messages/search")
+async def search_messages(
+    token: str = Depends(verify_token),
+    messageId: Optional[str] = Query(None),
+    numero: Optional[str] = Query(None)
+):
+    try:
+        keys = redis_client.keys("message:*")
+        results = []
+
+        for key in keys:
+            data = json.loads(redis_client.get(key))
+
+            if messageId and not data["id"].startswith(messageId):
+                continue
+
+            if numero and data.get("payload", {}).get("numero") != numero:
+                continue
+
+            job = scheduler.get_job(data["id"])
+
+            results.append({
+                "messageId": data["id"],
+                "scheduleTo": data["scheduleTo"],
+                "nextRun": job.next_run_time.isoformat() if job else None,
+                "payload": data["payload"]
+            })
+
+        return {
+            "scheduledJobs": results,
+            "count": len(results)
+        }
+
+    except Exception as e:
+        raise HTTPException(500, f"Search failed: {str(e)}")
+
 @app.get("/health")
 async def health_check():
     try:
