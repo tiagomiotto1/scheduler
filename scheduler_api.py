@@ -1,10 +1,10 @@
 import json
 import os
 from datetime import datetime
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 import redis
 import requests
-from fastapi import FastAPI, HTTPException, Depends, Header
+from fastapi import FastAPI, HTTPException, Depends, Header, Query
 from pydantic import BaseModel
 import uvicorn
 from dotenv import load_dotenv
@@ -198,9 +198,13 @@ async def search_messages(
         results = []
 
         for key in keys:
-            data = json.loads(redis_client.get(key))
+            raw = redis_client.get(key)
+            if not raw:
+                continue
 
-            if messageId and not data["id"].startswith(messageId):
+            data = json.loads(raw)
+
+            if messageId and not data.get("id", "").startswith(messageId):
                 continue
 
             if numero and data.get("payload", {}).get("numero") != numero:
@@ -211,17 +215,14 @@ async def search_messages(
             results.append({
                 "messageId": data["id"],
                 "scheduleTo": data["scheduleTo"],
-                "nextRun": job.next_run_time.isoformat() if job else None,
-                "payload": data["payload"]
+                "nextRun": job.next_run_time.isoformat() if job and job.next_run_time else None,
+                "payload": data.get("payload")
             })
 
-        return {
-            "scheduledJobs": results,
-            "count": len(results)
-        }
+        return {"scheduledJobs": results, "count": len(results)}
 
     except Exception as e:
-        raise HTTPException(500, f"Search failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
 
 @app.get("/health")
 async def health_check():
