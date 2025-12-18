@@ -176,7 +176,8 @@ async def list_scheduled_messages(token: str = Depends(verify_token)):
             jobs.append({
                 "messageId": job.id,
                 "nextRun": job.next_run_time.isoformat() if job.next_run_time else None,
-                "trigger": str(job.trigger)
+                "trigger": str(job.trigger),
+                "payload": job.payload if job.next_run_time else None
             })
         
         return {"scheduledJobs": jobs, "count": len(jobs)}
